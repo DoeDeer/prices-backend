@@ -1,0 +1,23 @@
+Bottleneck of this situation is endpoint response time and system overload when working with such a big load.
+
+At first, API has its capacity of RPS (requests per second) depending on host configuration, app's language
+performance, and other tasks that run on host. So, a single instance of API service simply could run out of resources
+when faced with such big RPS.
+Second problem is CPU load while making calculations - it would be problematic to calculate so many price differences
+on a single core of CPU (python uses only one core) without failing in trouble on the network part of the app.
+The Last problem is database overload - it can start executing queries too slowly when faced with such load.
+
+Solution for all this problem is to separate application into several microservices that would do only their work. For
+example:
+  1. API service - only accepts requests for getting price comparison. User can retrieve its request result later by
+  checking the request ID. Endpoint saves request ID and pushes requested price comparison to message brokers, such as
+  RabbitMQ.
+  2. Diff calculating service. It reads messages from the message broker, waits till the batch gets full size and after
+  getting full starts calculating diffs. After the end of calculations service sends the result to the message broker,
+  from where API can get it and pass it to the user. Alternatively this service can save the results of calculations
+  into the database.
+  3. Database optimization. For this point I see two ways:
+    3.1 Separate database instances into 2 services and configure one of them to work fast with prices reading and
+    second to work fast with writing prices. Apply some syncing mechanism.
+    3.2 Add a caching service like Redis to store previous prices in it and check the cache before making a read request
+    to the database. But there is a need to update the cache sometimes.
